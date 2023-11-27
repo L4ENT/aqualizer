@@ -1,38 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import "./styles.scss";
+import FrequencyControls from "./FrequencyControls";
 
 type EqualizerProps = {
-  stream: MediaStream;
+  buffer: ArrayBuffer;
 };
 
-function Equalizer({ stream }: EqualizerProps) {
-  const [analyser, setAnalyser] = useState<AnalyserNode | null>();
-  const sourceNode = useRef<MediaStreamAudioSourceNode>();
+function Equalizer({ buffer }: EqualizerProps) {
+  const [sourceNode, setSourceNode] = useState<AudioNode>();
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>();
+  const [onControlsIsReady, setOnControlsIsReady] =
+    useState<(node: AudioNode) => void>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
 
   const audioContext = useMemo(() => {
     return new AudioContext();
   }, []);
 
   useEffect(() => {
-    const source = audioContext.createMediaStreamSource(stream);
-    const analyserNode = audioContext.createAnalyser();
-    source.connect(analyserNode);
-    analyserNode.connect(audioContext.destination);
-
-    setAnalyser(analyserNode);
+    audioContext.decodeAudioData(buffer).then((audioBuffer) => {
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      setSourceNode(source);
+      source.start(0);
+    });
   }, []);
 
   useEffect(() => {
     const draw = () => {
-      if (canvasRef.current && analyser) {
+      if (canvasRef.current && analyserNode) {
         const canvasContext = canvasRef.current.getContext("2d");
         if (canvasContext) {
           const WIDTH = canvasRef.current.width;
           const HEIGHT = canvasRef.current.height;
-          const bufferLength = analyser.frequencyBinCount;
+          const bufferLength = analyserNode.frequencyBinCount;
           const dataArray = new Uint8Array(bufferLength);
-          analyser.getByteFrequencyData(dataArray);
+          analyserNode.getByteFrequencyData(dataArray);
           canvasContext.clearRect(0, 0, WIDTH, HEIGHT);
 
           let barWidth = (WIDTH / bufferLength) * 2.5;
@@ -56,10 +59,39 @@ function Equalizer({ stream }: EqualizerProps) {
     };
 
     draw();
-  }, [analyser]);
+  }, [analyserNode]);
+
+  useEffect(() => {
+    if (sourceNode && onControlsIsReady) {
+      onControlsIsReady(sourceNode);
+    }
+  }, [sourceNode, onControlsIsReady]);
+
+  const onFreqControlsInit = (firstNode: AudioNode, lastNode: AudioNode) => {
+    const callback = (srcNode: AudioNode) => {
+      const analyserNode = audioContext.createAnalyser();
+      console.trace("sdfsdfsdf", srcNode);
+      srcNode.connect(firstNode);
+      lastNode.connect(analyserNode);
+      analyserNode.connect(audioContext.destination);
+      setAnalyserNode(analyserNode);
+
+      // const analyserNode = audioContext.createAnalyser();
+      // srcNode.connect(analyserNode);
+      // analyserNode.connect(audioContext.destination);
+      // setAnalyserNode(analyserNode);
+    }
+    setOnControlsIsReady(() => callback)
+  };
 
   return (
     <div>
+      <div>
+        <FrequencyControls
+          audioContext={audioContext}
+          onInit={onFreqControlsInit}
+        />
+      </div>
       <canvas ref={canvasRef} width="800" height="301" />
     </div>
   );

@@ -1,0 +1,14 @@
+.freq-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.freq-slider {
+  display: flex;
+  flex-direction: row;
+  & input[type="range"] {
+    width: 175px;
+    padding: 0 5px;
+  }
+}
